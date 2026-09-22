@@ -1,0 +1,2 @@
+# Real-Time-Deer-Detection-and-Tracking-for-Wildlife-Monitoring-
+AI-powered real-time deer detection and tracking system using YOLO for accurate detection, ByteTrack for multi-object tracking and trajectory analysis, OpenCV for video processing, and Florence-2 for visual scene understanding. Designed for automated wildlife monitoring, movement analysis, and future intelligent surveillance applications.
