@@ -1,0 +1,38 @@
+# ─── Web Framework ────────────────────────────────────────────────────────────
+fastapi==0.110.0
+uvicorn[standard]==0.27.0
+pydantic==2.7.1
+python-multipart==0.0.9
+
+# ─── Environment / Config ─────────────────────────────────────────────────────
+python-dotenv==1.0.1
+PyYAML==6.0.1
+
+# ─── Computer Vision / AI ─────────────────────────────────────────────────────
+# PyTorch + CUDA: install separately via:
+#   pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+# (Already installed in .venv)
+ultralytics==8.4.163
+opencv-python==4.9.0.80
+numpy==1.26.4
+Pillow>=10.0.0
+
+# ─── Tracking ─────────────────────────────────────────────────────────────────
+# ByteTrack uses supervision (already installed in bytetrack/venv, add to main venv too)
+supervision>=0.19.0
+trackers>=0.0.1
+
+# ─── Geometry ─────────────────────────────────────────────────────────────────
+shapely==2.0.3
+
+# ─── VLM (BLIP) ───────────────────────────────────────────────────────────────
+transformers>=4.40.0
+accelerate>=0.27.0
+
+# ─── System / Utilities ───────────────────────────────────────────────────────
+psutil>=5.9.0
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+httpx==0.27.2
+

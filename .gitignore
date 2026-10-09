@@ -1,0 +1,63 @@
+# Byte-compiled / Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+
+# Virtual Environments (Root, Bytetrack, VLM, etc.)
+.venv/
+venv/
+**/venv/
+**/.venv/
+env/
+ENV/
+
+# Testing & Linting
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Frontend Build & Modules
+**/node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+.vite/
+
+# Sensitive Environment Configurations
+.env
+.env.local
+.env.*.local
+
+# Generated Outputs, Audits & Temporary Work
+outputs/
+**/outputs/
+scratch/
+
+# Large Datasets & Images
+**/datasets/images/
+datasets/
+*.jpg
+*.jpeg
+*.png
+!frontend/src/**/*.png
+!frontend/src/**/*.jpg
+!frontend/public/**/*.png
+!frontend/public/**/*.jpg
+!frontend/public/**/*.svg
+
+# Large Video Files (Can be stored separately or via Git LFS / cloud storage)
+*.mp4
+*.avi
+*.mov
+*.mkv
+videos/*.mp4
+!videos/.gitkeep
+
+# OS / Editor specific files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
