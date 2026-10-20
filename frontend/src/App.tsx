@@ -916,22 +916,101 @@ export default function App() {
             </div>
 
             <div className="camera-body" style={{ position: 'relative', overflow: 'hidden' }}>
-              {/* Hidden HTML5 Video for Browser Webcam capture */}
+              {/* Native HTML5 Video for zero-latency Browser Webcam preview */}
               <video
                 ref={hiddenVideoRef}
                 playsInline
                 muted
-                style={{ display: 'none' }}
+                style={{
+                  display: isStreamingBrowserCam ? 'block' : 'none',
+                  width: '100%',
+                  height: 'auto',
+                  minHeight: '320px',
+                  objectFit: 'contain',
+                }}
               />
 
+              {/* Standard MJPEG Stream for Backend / Server / Sample Video */}
               <img
                 ref={streamRef}
                 src={`${API_BASE}/video/stream?t=${streamTimestamp}`}
                 alt="Live annotated stream"
                 className="camera-stream"
                 onError={() => setBackendOnline(false)}
-                style={{ display: 'block', width: '100%', height: 'auto', minHeight: '320px', objectFit: 'contain' }}
+                style={{
+                  display: isStreamingBrowserCam ? 'none' : 'block',
+                  width: '100%',
+                  height: 'auto',
+                  minHeight: '320px',
+                  objectFit: 'contain',
+                }}
               />
+
+              {/* AI Detection & Trajectory Overlay for Live Browser Webcam */}
+              {isStreamingBrowserCam && tracks.length > 0 && (
+                <svg
+                  viewBox={`0 0 ${status?.frame_width || 640} ${status?.frame_height || 480}`}
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 4 }}
+                >
+                  {tracks.map(t => {
+                    const b = t.bbox;
+                    const color = t.risk === 'HIGH_RISK' ? '#e74c3c' : t.risk === 'CAUTION' ? '#f39c12' : '#2ecc71';
+                    return (
+                      <g key={t.track_id}>
+                        <rect
+                          x={b[0]}
+                          y={b[1]}
+                          width={b[2] - b[0]}
+                          height={b[3] - b[1]}
+                          fill="none"
+                          stroke={color}
+                          strokeWidth="3"
+                        />
+                        <rect
+                          x={b[0]}
+                          y={Math.max(0, b[1] - 22)}
+                          width={140}
+                          height={20}
+                          fill={color}
+                        />
+                        <text
+                          x={b[0] + 4}
+                          y={Math.max(14, b[1] - 7)}
+                          fill="#000"
+                          fontSize="12"
+                          fontWeight="bold"
+                        >
+                          #{t.track_id} {t.class_name} ({t.risk})
+                        </text>
+                        {t.trajectory && t.trajectory.length >= 2 && (
+                          <polyline
+                            points={t.trajectory.map(p => `${p[1]},${p[2]}`).join(' ')}
+                            fill="none"
+                            stroke="#2ecc71"
+                            strokeWidth="3"
+                          />
+                        )}
+                        <circle cx={t.position[0]} cy={t.position[1]} r={5} fill={color} />
+                        {t.predicted && (
+                          <>
+                            <line
+                              x1={t.position[0]}
+                              y1={t.position[1]}
+                              x2={t.predicted[0]}
+                              y2={t.predicted[1]}
+                              stroke="#3498db"
+                              strokeWidth="2"
+                              strokeDasharray="4 3"
+                            />
+                            <circle cx={t.predicted[0]} cy={t.predicted[1]} r={6} fill="none" stroke="#3498db" strokeWidth="2" />
+                          </>
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+              )}
+
               <div className="live-badge">
                 ● {isStreamingBrowserCam ? 'BROWSER WEBCAM (ACTIVE)' : (status?.components.camera || 'DISCONNECTED')}
               </div>

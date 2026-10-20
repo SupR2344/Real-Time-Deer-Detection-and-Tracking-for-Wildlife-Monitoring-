@@ -100,6 +100,9 @@ export const api = {
       body: formData,
     });
     if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error('Backend /upload-video endpoint not found. Please click Redeploy in Railway dashboard so the latest commit with video upload support goes live.');
+      }
       const err = await res.json().catch(() => ({ detail: 'Failed to upload video' }));
       throw new Error(err.detail || 'Failed to upload video');
     }
@@ -113,7 +116,13 @@ export const api = {
       method: 'POST',
       body: formData,
     });
-    if (!res.ok) throw new Error('Failed to process client frame');
+    if (!res.ok) {
+      if (res.status === 404) {
+        // Suppress repeated logs until Railway redeploy completes
+        return null;
+      }
+      throw new Error('Failed to process client frame');
+    }
     return res.json();
   },
 
