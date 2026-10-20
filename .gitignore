@@ -38,7 +38,7 @@ scratch/
 
 # Large Datasets & Images
 **/datasets/images/
-datasets/
+/datasets/
 *.jpg
 *.jpeg
 *.png

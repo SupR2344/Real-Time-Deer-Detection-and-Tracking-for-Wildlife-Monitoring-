@@ -13,8 +13,6 @@ from trackers.core.cbiou.tracker import CBIoUTracker
 from trackers.core.mcbyte.tracker import McByteMaskConfig, McByteTracker
 from trackers.core.ocsort.tracker import OCSORTTracker
 from trackers.core.sort.tracker import SORTTracker
-from trackers.datasets.download import download_dataset
-from trackers.datasets.manifest import Dataset, DatasetAsset, DatasetSplit
 from trackers.io.mot import load_mot_file
 from trackers.io.video import frames_from_source
 from trackers.motion.estimator import MotionEstimator
@@ -40,9 +38,6 @@ __all__ = [
     "CMCTMethod",
     "CoordinatesTransformation",
     "DIoU",
-    "Dataset",
-    "DatasetAsset",
-    "DatasetSplit",
     "GIoU",
     "HomographyTransformation",
     "IdentityTransformation",
@@ -53,7 +48,6 @@ __all__ = [
     "MotionEstimator",
     "OCSORTTracker",
     "SORTTracker",
-    "download_dataset",
     "frames_from_source",
     "load_mot_file",
     "xcycsr_to_xyxy",
