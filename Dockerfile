@@ -6,23 +6,20 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies required for OpenCV (both GUI & headless) and media handling
+# Install system dependencies required for OpenCV and media handling
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
     ffmpeg \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch CPU with NumPy 1.26.4 (prevents PyTorch from installing incompatible NumPy 2.x)
-RUN pip install --no-cache-dir "numpy==1.26.4" torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# Install PyTorch CPU first (standard cloud containers; for GPU use an nvidia/cuda base)
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# Copy requirements and install (strictly binary wheels, no source compilation)
+# Copy requirements and install
 COPY requirements.txt .
-RUN pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and model
 COPY . .
