@@ -152,28 +152,33 @@ class PipelineProcessor:
             cv2.putText(out, label, (bbox[0] + 2, bbox[1] - 3),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
-            # Trajectory (past points)
+            # Dynamic scaling factor based on frame width (ensures visibility on 720p, 1080p, and 4K)
+            scale = max(1.0, out.shape[1] / 960.0)
+            traj_thick = max(2, int(2.5 * scale))
+            pt_radius = max(3, int(3.5 * scale))
+
+            # Trajectory (past points trail)
             if len(traj_pts) >= 2:
                 pts_xy = [(int(p[1]), int(p[2])) for p in traj_pts]
                 for i in range(1, len(pts_xy)):
-                    cv2.line(out, pts_xy[i - 1], pts_xy[i], _TRAJ_COLOR, 2)
+                    cv2.line(out, pts_xy[i - 1], pts_xy[i], _TRAJ_COLOR, traj_thick)
                 for pt in pts_xy:
-                    cv2.circle(out, pt, 3, _TRAJ_COLOR, -1)
+                    cv2.circle(out, pt, pt_radius, _TRAJ_COLOR, -1)
 
             # Current centre
             cx = (bbox[0] + bbox[2]) // 2
             cy = (bbox[1] + bbox[3]) // 2
-            cv2.circle(out, (cx, cy), 5, color, -1)
+            cv2.circle(out, (cx, cy), max(5, int(5 * scale)), color, -1)
 
-            # Predicted position
+            # Predicted position (Kalman Filter Horizon)
             if predicted is not None:
                 px, py = int(predicted[0]), int(predicted[1])
                 if len(traj_pts) > 0:
                     last_pt = (int(traj_pts[-1][1]), int(traj_pts[-1][2]))
-                    cv2.line(out, last_pt, (px, py), _PRED_COLOR, 1)
-                cv2.circle(out, (px, py), 6, _PRED_COLOR, 2)
-                cv2.putText(out, "PRED", (px + 5, py - 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, _PRED_COLOR, 1)
+                    cv2.line(out, last_pt, (px, py), _PRED_COLOR, max(2, int(2 * scale)))
+                cv2.circle(out, (px, py), max(6, int(6 * scale)), _PRED_COLOR, max(2, int(2 * scale)))
+                cv2.putText(out, "PRED", (px + 6, py - 6),
+                            cv2.FONT_HERSHEY_SIMPLEX, max(0.4, 0.45 * scale), _PRED_COLOR, max(1, int(1.5 * scale)))
 
             # Caption (BLIP)
             caption = trk.get("caption")

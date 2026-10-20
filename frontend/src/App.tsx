@@ -68,26 +68,51 @@ function TrajCanvas({ track, frameWidth = 640, frameHeight = 480 }: { track: Tra
     const H = canvas.height;
     ctx.clearRect(0, 0, W, H);
 
+    // Subtle radar/coordinate grid
+    ctx.strokeStyle = 'rgba(30, 48, 74, 0.4)';
+    ctx.lineWidth = 1;
+    for (let x = 30; x < W; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+    for (let y = 20; y < H; y += 30) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+
     const traj = track.trajectory || [];
     if (traj.length === 0) {
       ctx.fillStyle = '#6b8ab0';
       ctx.font = '11px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Trajectory unavailable', W / 2, H / 2);
+      ctx.fillText('Trajectory acquiring (needs ≥ 2 frames)...', W / 2, H / 2);
       return;
     }
 
-    // Determine bounding box of trajectory to normalize or scale relative to frame
-    const fw = frameWidth > 0 ? frameWidth : 640;
-    const fh = frameHeight > 0 ? frameHeight : 480;
+    // Auto-fit bounding box to zoom into the deer's movement trajectory
+    const allX = traj.map(p => p[1]).concat([track.position[0]], track.predicted ? [track.predicted[0]] : []);
+    const allY = traj.map(p => p[2]).concat([track.position[1]], track.predicted ? [track.predicted[1]] : []);
+    const minX = Math.min(...allX);
+    const maxX = Math.max(...allX);
+    const minY = Math.min(...allY);
+    const maxY = Math.max(...allY);
 
-    const sx = (x: number) => (x / fw) * W;
-    const sy = (y: number) => (y / fh) * H;
+    const spanX = Math.max(maxX - minX, 30);
+    const spanY = Math.max(maxY - minY, 30);
+    const padX = spanX * 0.25;
+    const padY = spanY * 0.25;
+
+    const sx = (x: number) => 15 + ((x - (minX - padX)) / (spanX + 2 * padX)) * (W - 30);
+    const sy = (y: number) => 15 + ((y - (minY - padY)) / (spanY + 2 * padY)) * (H - 30);
 
     // Draw past trajectory line
     if (traj.length >= 2) {
       ctx.strokeStyle = '#2ecc71';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.moveTo(sx(traj[0][1]), sy(traj[0][2]));
       for (let i = 1; i < traj.length; i++) {
@@ -99,7 +124,7 @@ function TrajCanvas({ track, frameWidth = 640, frameHeight = 480 }: { track: Tra
       ctx.fillStyle = '#2ecc71';
       for (const pt of traj) {
         ctx.beginPath();
-        ctx.arc(sx(pt[1]), sy(pt[2]), 2.5, 0, Math.PI * 2);
+        ctx.arc(sx(pt[1]), sy(pt[2]), 3, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -109,17 +134,17 @@ function TrajCanvas({ track, frameWidth = 640, frameHeight = 480 }: { track: Tra
     const curY = sy(track.position[1]);
     ctx.fillStyle = '#e74c3c';
     ctx.beginPath();
-    ctx.arc(curX, curY, 4.5, 0, Math.PI * 2);
+    ctx.arc(curX, curY, 5, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw predicted line & future point
+    // Draw predicted line & future point (Kalman Horizon)
     if (track.predicted && (track.predicted[0] !== 0 || track.predicted[1] !== 0)) {
       const predX = sx(track.predicted[0]);
       const predY = sy(track.predicted[1]);
 
       ctx.strokeStyle = '#3498db';
       ctx.setLineDash([4, 3]);
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(curX, curY);
       ctx.lineTo(predX, predY);
@@ -128,8 +153,14 @@ function TrajCanvas({ track, frameWidth = 640, frameHeight = 480 }: { track: Tra
 
       ctx.fillStyle = '#3498db';
       ctx.beginPath();
-      ctx.arc(predX, predY, 4, 0, Math.PI * 2);
+      ctx.arc(predX, predY, 5, 0, Math.PI * 2);
       ctx.fill();
+
+      // Label current vs predicted
+      ctx.fillStyle = '#c5d8f0';
+      ctx.font = '9px monospace';
+      ctx.fillText('NOW', curX + 7, curY - 3);
+      ctx.fillText('KALMAN', predX + 7, predY - 3);
     }
   }, [track, frameWidth, frameHeight]);
 
@@ -1263,7 +1294,7 @@ export default function App() {
                     <span className="traj-dot pred" />Kalman Pred
                   </div>
                   <div className="traj-canvas">
-                    <TrajCanvas track={selectedTrack} frameWidth={streamRef.current?.naturalWidth || 640} frameHeight={streamRef.current?.naturalHeight || 480} />
+                    <TrajCanvas track={selectedTrack} frameWidth={status?.frame_width || streamRef.current?.naturalWidth || 640} frameHeight={status?.frame_height || streamRef.current?.naturalHeight || 480} />
                   </div>
                 </div>
               </div>
