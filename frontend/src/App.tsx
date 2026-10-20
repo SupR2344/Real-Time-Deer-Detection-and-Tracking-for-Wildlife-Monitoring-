@@ -341,6 +341,14 @@ export default function App() {
   const hasLiveFrame = backendOnline && frameId >= 0 && status?.components.camera === 'STREAMING';
   const deerDetected = (status?.detection_count ?? 0) > 0;
 
+  // Ensure video element plays when browser webcam is active
+  useEffect(() => {
+    if (isStreamingBrowserCam && hiddenVideoRef.current && browserMediaStreamRef.current) {
+      hiddenVideoRef.current.srcObject = browserMediaStreamRef.current;
+      hiddenVideoRef.current.play().catch(e => console.warn('Video play error:', e));
+    }
+  }, [isStreamingBrowserCam]);
+
   // Clean up browser camera on unmount
   useEffect(() => {
     return () => {
@@ -927,6 +935,7 @@ export default function App() {
               {/* Native HTML5 Video for zero-latency Browser Webcam preview */}
               <video
                 ref={hiddenVideoRef}
+                autoPlay
                 playsInline
                 muted
                 style={{
