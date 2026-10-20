@@ -1,3 +1,13 @@
+---
+title: DeerGuard AI Backend
+emoji: 🦌
+colorFrom: green
+colorTo: yellow
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # DEERGUARD AI — AI-Based Deer Detection, Tracking, Trajectory Prediction & Collision Warning System
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)

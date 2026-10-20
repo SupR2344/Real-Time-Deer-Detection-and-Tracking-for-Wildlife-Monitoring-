@@ -4,8 +4,6 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-WORKDIR /app
-
 # Install system dependencies required for OpenCV and media handling
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
@@ -13,6 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user (UID 1000) for Hugging Face Spaces & security
+RUN useradd -m -u 1000 user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
+
+WORKDIR /app
 
 # Install PyTorch CPU and pinned NumPy 1.26.4 together
 RUN pip install --no-cache-dir numpy==1.26.4 torch torchvision --index-url https://download.pytorch.org/whl/cpu
@@ -27,15 +32,22 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 RUN python -c "import cv2; import torch; import ultralytics; import shapely; print('Build verification: all AI/CV imports OK!')"
 
 # Copy source code and model
-COPY . .
+COPY --chown=user:user . .
 
-# Expose backend port
+# Ensure upload and output directories are writable by non-root user
+RUN mkdir -p /app/videos/uploads /app/outputs /home/user/.cache && \
+    chown -R user:user /app /home/user
+
+USER user
+
+# Expose backend ports (7860 for Hugging Face Spaces, 8000 for standard Docker)
+EXPOSE 7860
 EXPOSE 8000
 
-# Set environment variables
+# Set environment variables (defaults to 7860 for Hugging Face Spaces)
 ENV HOST=0.0.0.0
-ENV PORT=8000
+ENV PORT=7860
 ENV YOLO_DEVICE=cpu
 
-# Command to run FastAPI server (respects dynamic cloud $PORT e.g. on Railway/Render)
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Command to run FastAPI server (respects dynamic cloud $PORT e.g. on HuggingFace/Render/Railway)
+CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]
