@@ -1,0 +1,22 @@
+# Ignore Python backend and data from Vercel frontend builds
+requirements.txt
+backend/
+bytetrack/
+bytetrack_adapter/
+camera/
+collision/
+config/
+detection/
+model/
+pipeline/
+prediction/
+scripts/
+tests/
+trajectory/
+videos/
+vlm/
+Dockerfile
+render.yaml
+pytest.ini
+*.mp4
+*.pt
