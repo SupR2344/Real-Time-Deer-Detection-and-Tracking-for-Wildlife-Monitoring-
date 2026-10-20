@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 
 # Copy requirements and install
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt opencv-python-headless
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and model
 COPY . .
@@ -32,5 +32,5 @@ ENV HOST=0.0.0.0
 ENV PORT=8000
 ENV YOLO_DEVICE=cpu
 
-# Command to run FastAPI server
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run FastAPI server (respects dynamic cloud $PORT e.g. on Railway/Render)
+CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

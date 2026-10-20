@@ -13,8 +13,8 @@ PyYAML==6.0.1
 #   pip install torch==2.6.0+cu124 torchvision==0.21.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
 # (Already installed in .venv)
 ultralytics==8.4.163
-opencv-python==4.9.0.80
-numpy==1.26.4
+opencv-python-headless>=4.8.0
+numpy>=1.26.4
 Pillow>=10.0.0
 
 # ─── Tracking ─────────────────────────────────────────────────────────────────
