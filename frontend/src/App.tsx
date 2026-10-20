@@ -449,6 +449,12 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 20 * 1024 * 1024) {
+      alert(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Free cloud hosting limits direct browser uploads to 20 MB. Please select 'videos/deer_test.mp4' from the dropdown to run directly on the server without uploading, or choose a clip under 20 MB.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     if (isStreamingBrowserCam) {
       await handleStopBrowserCamera();
     }
@@ -809,19 +815,11 @@ export default function App() {
 
                 {selectedSourceTab === 'video' && (
                   <>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <button
-                          className="source-upload-btn"
-                          disabled={isUploadingVideo}
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          {isUploadingVideo ? (uploadProgress || 'Uploading...') : '📁 Choose & Upload Video File'}
-                        </button>
-
-                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>or sample:</span>
-
-                        {availableVideos.length > 0 && (
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* 1. Instant Server Video Selector */}
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flex: 1 }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Server Video:</span>
                           <select
                             className="source-select-field"
                             style={{ flex: 1, minWidth: '180px' }}
@@ -834,14 +832,24 @@ export default function App() {
                               </option>
                             ))}
                           </select>
-                        )}
+                          <button
+                            className="source-action-btn"
+                            disabled={isSwitchingSource || !videoPath}
+                            onClick={() => handleConnectSource('video', videoPath)}
+                          >
+                            {isSwitchingSource ? 'Loading...' : '▶ Run Server Video'}
+                          </button>
+                        </div>
 
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>or</span>
+
+                        {/* 2. Upload Custom File (<20MB) */}
                         <button
-                          className="source-action-btn"
-                          disabled={isSwitchingSource}
-                          onClick={() => handleConnectSource('video', videoPath)}
+                          className="source-upload-btn"
+                          disabled={isUploadingVideo}
+                          onClick={() => fileInputRef.current?.click()}
                         >
-                          {isSwitchingSource ? 'Loading...' : '▶ Run Selected'}
+                          {isUploadingVideo ? (uploadProgress || 'Uploading...') : '📁 Upload Custom Clip (<20MB)'}
                         </button>
                       </div>
                     </div>
