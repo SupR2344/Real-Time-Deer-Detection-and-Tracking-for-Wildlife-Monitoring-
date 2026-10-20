@@ -3,7 +3,7 @@ services:
     name: deerguard-ai-backend
     env: docker
     dockerfilePath: Dockerfile
-    plan: standard
+    plan: free
     region: oregon
     envVars:
       - key: PORT
@@ -13,6 +13,6 @@ services:
       - key: YOLO_DEVICE
         value: cpu
       - key: CAMERA_TYPE
-        value: LOCAL_VIDEO
+        value:
       - key: CAMERA_SOURCE
-        value: videos/deer_test.mp4
+        value:
