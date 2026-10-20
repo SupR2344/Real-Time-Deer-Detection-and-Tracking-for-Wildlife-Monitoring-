@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && \
     pip uninstall -y opencv-python opencv-python-headless && \
-    pip install --no-cache-dir opencv-python-headless
+    pip install --no-cache-dir opencv-python-headless==4.9.0.80 numpy==1.26.4
 
 # Verify all key imports during build to guarantee zero runtime collisions
 RUN python -c "import cv2; import torch; import ultralytics; import shapely; print('Build verification: all AI/CV imports OK!')"
