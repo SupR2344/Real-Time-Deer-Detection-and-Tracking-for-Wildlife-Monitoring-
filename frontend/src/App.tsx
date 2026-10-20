@@ -152,6 +152,19 @@ export default function App() {
   const [streamTimestamp, setStreamTimestamp] = useState<number>(Date.now());
   const initialSourceSynced = useRef(false);
 
+  // Browser webcam streaming state (with native camera permission grant)
+  const [isStreamingBrowserCam, setIsStreamingBrowserCam] = useState(false);
+  const [browserCamError, setBrowserCamError] = useState<string | null>(null);
+  const browserMediaStreamRef = useRef<MediaStream | null>(null);
+  const hiddenVideoRef = useRef<HTMLVideoElement | null>(null);
+  const clientFrameCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const clientStreamIntervalRef = useRef<any>(null);
+
+  // Video file upload state
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploadingVideo, setIsUploadingVideo] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
@@ -297,7 +310,146 @@ export default function App() {
   const hasLiveFrame = backendOnline && frameId >= 0 && status?.components.camera === 'STREAMING';
   const deerDetected = (status?.detection_count ?? 0) > 0;
 
+  // Clean up browser camera on unmount
+  useEffect(() => {
+    return () => {
+      if (clientStreamIntervalRef.current) clearInterval(clientStreamIntervalRef.current);
+      if (browserMediaStreamRef.current) {
+        browserMediaStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, []);
+
+  const handleStartBrowserCamera = async () => {
+    try {
+      setBrowserCamError(null);
+      setIsSwitchingSource(true);
+      addEvent('Requesting browser camera permission...', 'info');
+
+      // Native browser permission prompt
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user',
+        },
+        audio: false,
+      });
+
+      browserMediaStreamRef.current = stream;
+      if (hiddenVideoRef.current) {
+        hiddenVideoRef.current.srcObject = stream;
+        await hiddenVideoRef.current.play();
+      }
+
+      setIsStreamingBrowserCam(true);
+      addEvent('Camera permission granted! Streaming browser camera to AI pipeline...', 'success');
+
+      const canvas = clientFrameCanvasRef.current || document.createElement('canvas');
+      clientFrameCanvasRef.current = canvas;
+
+      let isSending = false;
+      const sendLoop = async () => {
+        if (!browserMediaStreamRef.current) return;
+        const video = hiddenVideoRef.current;
+        if (!video || video.readyState < 2) return;
+        if (isSending) return;
+        isSending = true;
+
+        try {
+          const targetW = Math.min(video.videoWidth || 640, 960);
+          const targetH = Math.round(targetW * ((video.videoHeight || 480) / (video.videoWidth || 640)));
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, targetW, targetH);
+            canvas.toBlob(async (blob) => {
+              if (blob && browserMediaStreamRef.current) {
+                try {
+                  await api.sendClientFrame(blob);
+                } catch (err) {
+                  console.warn('Client frame send error:', err);
+                }
+              }
+              isSending = false;
+            }, 'image/jpeg', 0.8);
+          } else {
+            isSending = false;
+          }
+        } catch {
+          isSending = false;
+        }
+      };
+
+      const timer = setInterval(sendLoop, 120);
+      clientStreamIntervalRef.current = timer;
+      setStreamTimestamp(Date.now());
+    } catch (err: any) {
+      console.error('Camera permission denied:', err);
+      setBrowserCamError(err.message || 'Permission denied');
+      addEvent(`Camera permission error: ${err.message || err}`, 'danger');
+    } finally {
+      setIsSwitchingSource(false);
+    }
+  };
+
+  const handleStopBrowserCamera = async () => {
+    if (clientStreamIntervalRef.current) {
+      clearInterval(clientStreamIntervalRef.current);
+      clientStreamIntervalRef.current = null;
+    }
+    if (browserMediaStreamRef.current) {
+      browserMediaStreamRef.current.getTracks().forEach(track => track.stop());
+      browserMediaStreamRef.current = null;
+    }
+    if (hiddenVideoRef.current) {
+      hiddenVideoRef.current.srcObject = null;
+    }
+    setIsStreamingBrowserCam(false);
+    try {
+      await api.stopClientFrame();
+    } catch {}
+    addEvent('Browser camera stopped', 'info');
+    setStreamTimestamp(Date.now());
+  };
+
+  const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (isStreamingBrowserCam) {
+      await handleStopBrowserCamera();
+    }
+
+    setIsUploadingVideo(true);
+    setUploadProgress(`Uploading ${file.name}...`);
+    addEvent(`Uploading video file: ${file.name}...`, 'info');
+
+    try {
+      const res = await api.uploadVideo(file);
+      addEvent(`Video uploaded! Running detection on: ${res.name}`, 'success');
+      setVideoPath(res.path);
+      try {
+        const sources = await api.getAvailableSources();
+        setAvailableVideos(sources.videos || []);
+      } catch {}
+      setSelectedSourceTab('video');
+      setStreamTimestamp(Date.now());
+    } catch (err: any) {
+      addEvent(`Failed to upload video: ${err.message || err}`, 'danger');
+      alert(`Upload failed: ${err.message || err}`);
+    } finally {
+      setIsUploadingVideo(false);
+      setUploadProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleConnectSource = async (type: string, sourceValue: string) => {
+    if (isStreamingBrowserCam) {
+      await handleStopBrowserCamera();
+    }
     setIsSwitchingSource(true);
     try {
       addEvent(`Requesting source switch to [${type}]: ${sourceValue}`, 'info');
@@ -323,6 +475,9 @@ export default function App() {
   const handleStopSource = async () => {
     setIsSwitchingSource(true);
     try {
+      if (isStreamingBrowserCam) {
+        await handleStopBrowserCamera();
+      }
       await api.stopSource();
       addEvent('Camera source stopped by user', 'info');
       setTimeout(async () => {
@@ -489,65 +644,110 @@ export default function App() {
 
               {/* Source Configuration Controls */}
               <div className="source-config-row">
+                {/* Hidden File Input for Video Upload */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="video/mp4,video/avi,video/mov,video/mkv,video/webm"
+                  style={{ display: 'none' }}
+                  onChange={handleVideoFileUpload}
+                />
+
                 {selectedSourceTab === 'integrated' && (
                   <>
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {availableWebcams.some(w => w.index === 0)
-                          ? `Hardware Detected: ${availableWebcams.find(w => w.index === 0)?.label}`
-                          : 'OpenCV device index 0 (availability unverified)'}
+                        {isStreamingBrowserCam
+                          ? '🟢 Browser Camera Active — capturing frames with user permission'
+                          : '⚡ Web Camera: Prompts native browser permission to capture your device camera'}
                       </div>
-                      <input
-                        type="text"
-                        value="0"
-                        readOnly
-                        className="source-input-field"
-                        style={{ background: '#0a101d', color: '#8aa2c0', cursor: 'default' }}
-                      />
+                      {browserCamError && (
+                        <div style={{ fontSize: '11px', color: 'var(--red)' }}>
+                          ⚠️ {browserCamError}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {isStreamingBrowserCam ? (
+                          <button
+                            className="source-stop-btn"
+                            onClick={handleStopBrowserCamera}
+                          >
+                            ⏹ Stop Device Camera
+                          </button>
+                        ) : (
+                          <button
+                            className="source-grant-btn"
+                            disabled={isSwitchingSource}
+                            onClick={handleStartBrowserCamera}
+                          >
+                            📷 Grant Permission & Start Camera
+                          </button>
+                        )}
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>or OpenCV Local:</span>
+                        <button
+                          className="source-action-btn"
+                          style={{ padding: '6px 12px', fontSize: '11px', background: '#1e304a' }}
+                          disabled={isSwitchingSource}
+                          onClick={() => handleConnectSource('integrated', '0')}
+                        >
+                          Server Index 0
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      className="source-action-btn"
-                      disabled={isSwitchingSource}
-                      onClick={() => handleConnectSource('integrated', '0')}
-                    >
-                      {isSwitchingSource ? 'Connecting...' : 'Connect Integrated Camera'}
-                    </button>
                   </>
                 )}
 
                 {selectedSourceTab === 'webcam' && (
                   <>
-                    <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        {isStreamingBrowserCam
+                          ? '🟢 USB / External Camera Active via Browser'
+                          : '⚡ Prompts browser webcam permission or connects attached USB OpenCV camera'}
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {isStreamingBrowserCam ? (
+                          <button
+                            className="source-stop-btn"
+                            onClick={handleStopBrowserCamera}
+                          >
+                            ⏹ Stop Webcam
+                          </button>
+                        ) : (
+                          <button
+                            className="source-grant-btn"
+                            disabled={isSwitchingSource}
+                            onClick={handleStartBrowserCamera}
+                          >
+                            🔌 Grant Permission & Start Webcam
+                          </button>
+                        )}
+
                         {availableWebcams.some(cam => cam.kind === 'webcam') && (
-                        <select
-                          className="source-select-field"
-                          style={{ flex: 1 }}
-                          value={webcamIndex}
-                          onChange={e => setWebcamIndex(e.target.value)}
+                          <select
+                            className="source-select-field"
+                            style={{ maxWidth: '180px' }}
+                            value={webcamIndex}
+                            onChange={e => setWebcamIndex(e.target.value)}
+                          >
+                            {availableWebcams.filter(cam => cam.kind === 'webcam').map(cam => (
+                              <option key={cam.index} value={String(cam.index)}>
+                                {cam.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        <button
+                          className="source-action-btn"
+                          style={{ padding: '6px 12px', fontSize: '11px', background: '#1e304a' }}
+                          disabled={isSwitchingSource}
+                          onClick={() => handleConnectSource('webcam', webcamIndex)}
                         >
-                          {availableWebcams.filter(cam => cam.kind === 'webcam').map(cam => (
-                            <option key={cam.index} value={String(cam.index)}>
-                              {cam.label}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <input
-                        type="text"
-                        placeholder="Device index (e.g. 0, 1, 2)"
-                        value={webcamIndex}
-                        onChange={e => setWebcamIndex(e.target.value)}
-                        className="source-input-field"
-                        style={{ maxWidth: '160px' }}
-                      />
+                          Server Index {webcamIndex}
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      className="source-action-btn"
-                      disabled={isSwitchingSource}
-                      onClick={() => handleConnectSource('webcam', webcamIndex)}
-                    >
-                      {isSwitchingSource ? 'Connecting...' : 'Connect Webcam'}
-                    </button>
                   </>
                 )}
 
@@ -556,7 +756,7 @@ export default function App() {
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <input
                         type="text"
-                        placeholder="rtsp://camera-host:554/stream"
+                        placeholder="rtsp://camera-host:554/stream or http://stream-url"
                         value={rtspUrl}
                         onChange={e => setRtspUrl(e.target.value)}
                         className="source-input-field"
@@ -578,42 +778,48 @@ export default function App() {
 
                 {selectedSourceTab === 'video' && (
                   <>
-                    <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      {availableVideos.length > 0 && (
-                        <select
-                          className="source-select-field"
-                          style={{ flex: 1 }}
-                          value={videoPath}
-                          onChange={e => setVideoPath(e.target.value)}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button
+                          className="source-upload-btn"
+                          disabled={isUploadingVideo}
+                          onClick={() => fileInputRef.current?.click()}
                         >
-                          {availableVideos.map(v => (
-                            <option key={v.path} value={v.path}>
-                              {v.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <input
-                        type="text"
-                        placeholder="Video path (e.g. 13297686_3840_2160_60fps.mp4)"
-                        value={videoPath}
-                        onChange={e => setVideoPath(e.target.value)}
-                        className="source-input-field"
-                      />
+                          {isUploadingVideo ? (uploadProgress || 'Uploading...') : '📁 Choose & Upload Video File'}
+                        </button>
+
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>or sample:</span>
+
+                        {availableVideos.length > 0 && (
+                          <select
+                            className="source-select-field"
+                            style={{ flex: 1, minWidth: '180px' }}
+                            value={videoPath}
+                            onChange={e => setVideoPath(e.target.value)}
+                          >
+                            {availableVideos.map(v => (
+                              <option key={v.path} value={v.path}>
+                                {v.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+
+                        <button
+                          className="source-action-btn"
+                          disabled={isSwitchingSource}
+                          onClick={() => handleConnectSource('video', videoPath)}
+                        >
+                          {isSwitchingSource ? 'Loading...' : '▶ Run Selected'}
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      className="source-action-btn"
-                      disabled={isSwitchingSource}
-                      onClick={() => handleConnectSource('video', videoPath)}
-                    >
-                      {isSwitchingSource ? 'Loading...' : 'Load & Run Video'}
-                    </button>
                   </>
                 )}
 
                 <button
                   className="source-stop-btn"
-                  disabled={isSwitchingSource || (status?.components.camera === 'DISCONNECTED')}
+                  disabled={isSwitchingSource || (!isStreamingBrowserCam && status?.components.camera === 'DISCONNECTED')}
                   onClick={handleStopSource}
                 >
                   Stop Source
@@ -679,6 +885,14 @@ export default function App() {
             </div>
 
             <div className="camera-body" style={{ position: 'relative', overflow: 'hidden' }}>
+              {/* Hidden HTML5 Video for Browser Webcam capture */}
+              <video
+                ref={hiddenVideoRef}
+                playsInline
+                muted
+                style={{ display: 'none' }}
+              />
+
               <img
                 ref={streamRef}
                 src={`${API_BASE}/video/stream?t=${streamTimestamp}`}
@@ -687,7 +901,33 @@ export default function App() {
                 onError={() => setBackendOnline(false)}
                 style={{ display: 'block', width: '100%', height: 'auto', minHeight: '320px', objectFit: 'contain' }}
               />
-              <div className="live-badge">● {status?.components.camera || 'DISCONNECTED'}</div>
+              <div className="live-badge">
+                ● {isStreamingBrowserCam ? 'BROWSER WEBCAM (ACTIVE)' : (status?.components.camera || 'DISCONNECTED')}
+              </div>
+
+              {/* Standby / No Source Active Overlay */}
+              {!isStreamingBrowserCam && (status?.components.camera === 'DISCONNECTED' || !status?.components.camera) && (
+                <div className="stream-placeholder-overlay">
+                  <div className="placeholder-content">
+                    <div className="placeholder-icon">🦌</div>
+                    <div className="placeholder-title">DeerGuard AI — Standby Mode</div>
+                    <div className="placeholder-desc">
+                      Grant camera permission to stream your live device camera, upload a custom video file, or test the included 4K wildlife demo.
+                    </div>
+                    <div className="placeholder-actions">
+                      <button className="primary-pill-btn" onClick={handleStartBrowserCamera}>
+                        📷 Use Device Camera (Grant Permission)
+                      </button>
+                      <button className="secondary-pill-btn" onClick={() => fileInputRef.current?.click()}>
+                        📁 Upload Video File
+                      </button>
+                      <button className="secondary-pill-btn" onClick={() => handleConnectSource('video', '13297686_3840_2160_60fps.mp4')}>
+                        ▶ Play 4K Demo Video
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Interactive Zone Editor Overlay */}
               {isConfiguringZone && (

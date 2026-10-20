@@ -91,4 +91,37 @@ export const api = {
     if (!res.ok) throw new Error('Failed to reset system');
     return res.json();
   },
+
+  async uploadVideo(file: File): Promise<{ status: string; name: string; path: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE}/upload-video`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Failed to upload video' }));
+      throw new Error(err.detail || 'Failed to upload video');
+    }
+    return res.json();
+  },
+
+  async sendClientFrame(blob: Blob): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', blob, 'frame.jpg');
+    const res = await fetch(`${API_BASE}/client-frame`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) throw new Error('Failed to process client frame');
+    return res.json();
+  },
+
+  async stopClientFrame(): Promise<{ status: string }> {
+    const res = await fetch(`${API_BASE}/client-frame/stop`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to stop client frame session');
+    return res.json();
+  },
 };

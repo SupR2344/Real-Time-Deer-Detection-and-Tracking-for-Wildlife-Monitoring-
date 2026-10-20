@@ -110,20 +110,28 @@ class CameraManager:
 
     @staticmethod
     def list_available_videos() -> List[Dict]:
-        """Find local test videos in the project."""
+        """Find local and uploaded test videos in the project."""
         from pathlib import Path
         videos = []
         root = Path(__file__).resolve().parent.parent
         found = set()
-        for p in root.glob("*.mp4"):
-            if "output" not in p.name.lower() and p.name not in found:
-                found.add(p.name)
-                videos.append({"name": p.name, "path": p.name})
+        video_exts = ("*.mp4", "*.avi", "*.mov", "*.mkv", "*.webm")
+
+        # Check root
+        for ext in video_exts:
+            for p in root.glob(ext):
+                if "output" not in p.name.lower() and p.name not in found:
+                    found.add(p.name)
+                    videos.append({"name": p.name, "path": p.name})
+
+        # Check videos/ and videos/uploads/
         vdir = root / "videos"
         if vdir.is_dir():
-            for p in vdir.glob("*.mp4"):
-                rel = f"videos/{p.name}"
-                if rel not in found:
-                    found.add(rel)
-                    videos.append({"name": rel, "path": rel})
+            for ext in video_exts:
+                for p in vdir.rglob(ext):
+                    rel = p.relative_to(root).as_posix()
+                    if rel not in found and "output" not in p.name.lower():
+                        found.add(rel)
+                        label = f"Uploaded: {p.name}" if "upload" in rel else p.name
+                        videos.append({"name": label, "path": rel})
         return videos
