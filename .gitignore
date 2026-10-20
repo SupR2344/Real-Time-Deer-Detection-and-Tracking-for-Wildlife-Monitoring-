@@ -55,6 +55,7 @@ datasets/
 *.mkv
 videos/*.mp4
 !videos/.gitkeep
+!videos/deer_test.mp4
 
 # OS / Editor specific files
 .DS_Store

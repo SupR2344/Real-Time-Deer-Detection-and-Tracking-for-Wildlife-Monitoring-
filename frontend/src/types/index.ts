@@ -30,6 +30,9 @@ export interface RuntimeStatus {
   uptime: number;
   fps: number;
   frame_id: number;
+  frame_width?: number;
+  frame_height?: number;
+  processing_status?: string;
   gpu: string;
   active_tracks: number;
   high_risk_count: number;

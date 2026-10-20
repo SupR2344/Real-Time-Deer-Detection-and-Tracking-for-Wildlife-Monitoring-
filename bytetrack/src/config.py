@@ -7,6 +7,8 @@ class ByteTrackConfig:
     lost_track_buffer: int = 90
     minimum_iou_threshold: float = 0.20
     frame_rate: int = 30
+    high_conf_det_threshold: float = 0.10
+    minimum_consecutive_frames: int = 1
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.track_activation_threshold <= 1.0:
@@ -27,4 +29,14 @@ class ByteTrackConfig:
         if self.frame_rate <= 0:
             raise ValueError(
                 "frame_rate must be greater than 0."
+            )
+
+        if not 0.0 <= self.high_conf_det_threshold <= 1.0:
+            raise ValueError(
+                "high_conf_det_threshold must be between 0.0 and 1.0."
+            )
+
+        if self.minimum_consecutive_frames < 1:
+            raise ValueError(
+                "minimum_consecutive_frames must be >= 1."
             )

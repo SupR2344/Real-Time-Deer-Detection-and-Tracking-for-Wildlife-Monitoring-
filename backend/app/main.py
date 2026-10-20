@@ -200,14 +200,17 @@ _thread.start()
 
 def _mjpeg_generator() -> Generator[bytes, None, None]:
     boundary = b"--frame"
-    while True:
-        jpeg = state.get_frame()
-        if jpeg is None:
-            time.sleep(0.033)
-            continue
-        header = b"\r\nContent-Type: image/jpeg\r\n\r\n"
-        yield boundary + header + jpeg + b"\r\n"
-        time.sleep(0.033)   # ~30 fps cap
+    try:
+        while True:
+            jpeg = state.get_frame()
+            if jpeg is None:
+                time.sleep(0.033)
+                continue
+            header = b"\r\nContent-Type: image/jpeg\r\n\r\n"
+            yield boundary + header + jpeg + b"\r\n"
+            time.sleep(0.033)   # ~30 fps cap
+    except (GeneratorExit, StopIteration):
+        pass
 
 
 # ── Core Handlers (Mounted on both / and /api) ──────────────────────────────────
@@ -254,6 +257,15 @@ def api_get_runtime() -> JSONResponse:
         gpu_info = torch.cuda.get_device_name(0)
 
     high_risk_count = sum(1 for t in tracks if t.get("risk") == "HIGH_RISK")
+    w, h = state.get_frame_dimensions()
+
+    proc_status = "IDLE"
+    if camera_status == "STREAMING":
+        proc_status = "ACTIVE"
+    elif camera_status == "CONNECTING":
+        proc_status = "CONNECTING"
+    elif camera_status == "ERROR":
+        proc_status = "ERROR"
 
     return JSONResponse(content={
         "system_online": True,
@@ -261,6 +273,9 @@ def api_get_runtime() -> JSONResponse:
         "uptime": uptime,
         "fps": round(fps, 1),
         "frame_id": frame_id,
+        "frame_width": w,
+        "frame_height": h,
+        "processing_status": proc_status,
         "detection_count": state.get_detection_count(),
         "deer_detected": state.get_detection_count() > 0,
         "gpu": gpu_info,
@@ -383,9 +398,13 @@ def api_delete_road_zone() -> JSONResponse:
 @router.post("/reset")
 def api_reset_system() -> JSONResponse:
     global processor, _start_time
+    cur = get_current_source()
     state.reset()
     processor = PipelineProcessor()
     _start_time = time.time()
+    if cur is not None:
+        state.set_source(cur.type, cur.source)
+        _source_changed.set()
     logger.info("System reset")
     state.add_event("System reset by user", "info")
     return JSONResponse(content={"status": "reset"})

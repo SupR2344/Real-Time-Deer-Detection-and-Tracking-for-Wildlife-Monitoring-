@@ -23,6 +23,8 @@ class ByteTrackAdapter:
             "lost_track_buffer": 60,              # Longer buffer for low-FPS 4K processing
             "minimum_iou_threshold": 0.2,         # Lower IoU for large 4K bboxes
             "frame_rate": 30,
+            "high_conf_det_threshold": 0.05,
+            "minimum_consecutive_frames": 1,
         }
         cfg_dict = config or default_cfg
         cfg = ByteTrackConfig(**cfg_dict)

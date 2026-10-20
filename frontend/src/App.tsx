@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, MouseEvent } from 'react';
 import './App.css';
 import { Track, RuntimeStatus, EventLog, WebcamDevice, VideoFile } from './types';
-import { api } from './services/api';
+import { api, API_BASE } from './services/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +149,8 @@ export default function App() {
 
   const [isConfiguringZone, setIsConfiguringZone] = useState(false);
   const [zonePoints, setZonePoints] = useState<[number, number][]>([]);
+  const [streamTimestamp, setStreamTimestamp] = useState<number>(Date.now());
+  const initialSourceSynced = useRef(false);
 
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -266,7 +268,8 @@ export default function App() {
         const data = await api.getRuntime();
         if (!mounted) return;
         setStatus(data);
-        if (data.source && data.source.source && data.source.type) {
+        if (!initialSourceSynced.current && data.source && data.source.source && data.source.type) {
+          initialSourceSynced.current = true;
           const st = data.source.type.toLowerCase();
           if (st.includes('integrated')) setSelectedSourceTab('integrated');
           else if (st.includes('webcam') || st.includes('usb')) setSelectedSourceTab('webcam');
@@ -300,11 +303,14 @@ export default function App() {
       addEvent(`Requesting source switch to [${type}]: ${sourceValue}`, 'info');
       await api.configureSource(type, sourceValue);
       addEvent(`Source [${type}] configured — connecting...`, 'info');
+      setSelectedSourceTab(type as any);
+      setStreamTimestamp(Date.now());
       // Promptly refresh status
       setTimeout(async () => {
         try {
           const rt = await api.getRuntime();
           setStatus(rt);
+          setStreamTimestamp(Date.now());
         } catch {}
       }, 800);
     } catch (e: any) {
@@ -340,8 +346,29 @@ export default function App() {
       setTracks([]);
       setSelectedTrack(null);
       prevTracksRef.current = [];
+      setStreamTimestamp(Date.now());
+      setTimeout(async () => {
+        try {
+          const rt = await api.getRuntime();
+          setStatus(rt);
+        } catch {}
+      }, 500);
     } catch (e) {
       addEvent(`Failed to reset: ${e}`, 'danger');
+    }
+  };
+
+  const handleOpenRoadZoneConfig = async () => {
+    setIsConfiguringZone(true);
+    try {
+      const data = await api.getRoadZone();
+      if (data.points && data.points.length > 0) {
+        setZonePoints(data.points);
+      } else {
+        setZonePoints([]);
+      }
+    } catch {
+      setZonePoints([]);
     }
   };
 
@@ -351,11 +378,15 @@ export default function App() {
       return;
     }
     try {
-      const nw = streamRef.current?.naturalWidth || 1280;
-      const nh = streamRef.current?.naturalHeight || 720;
+      const nw = status?.frame_width || streamRef.current?.naturalWidth || 1280;
+      const nh = status?.frame_height || streamRef.current?.naturalHeight || 720;
       await api.setRoadZone(zonePoints, nw, nh);
       setIsConfiguringZone(false);
       addEvent(`Road zone polygon saved (${zonePoints.length} vertices)`, 'success');
+      try {
+        const rt = await api.getRuntime();
+        setStatus(rt);
+      } catch {}
     } catch (e) {
       alert(`Error saving road zone: ${e}`);
     }
@@ -368,6 +399,10 @@ export default function App() {
       setZonePoints([]);
       setIsConfiguringZone(false);
       addEvent('Road zone cleared', 'info');
+      try {
+        const rt = await api.getRuntime();
+        setStatus(rt);
+      } catch {}
     } catch (e) {
       alert(`Error clearing road zone: ${e}`);
     }
@@ -646,7 +681,7 @@ export default function App() {
             <div className="camera-body" style={{ position: 'relative', overflow: 'hidden' }}>
               <img
                 ref={streamRef}
-                src="/api/video/stream"
+                src={`${API_BASE}/video/stream?t=${streamTimestamp}`}
                 alt="Live annotated stream"
                 className="camera-stream"
                 onError={() => setBackendOnline(false)}
@@ -661,8 +696,8 @@ export default function App() {
                   onClick={(e: MouseEvent<HTMLDivElement>) => {
                     if (!streamRef.current) return;
                     const rect = streamRef.current.getBoundingClientRect();
-                    const nw = streamRef.current.naturalWidth || 1280;
-                    const nh = streamRef.current.naturalHeight || 720;
+                    const nw = status?.frame_width || streamRef.current.naturalWidth || 1280;
+                    const nh = status?.frame_height || streamRef.current.naturalHeight || 720;
                     const scaleX = nw / rect.width;
                     const scaleY = nh / rect.height;
                     const x = (e.clientX - rect.left) * scaleX;
@@ -676,8 +711,8 @@ export default function App() {
                         points={zonePoints.map(p => {
                           if (!streamRef.current) return '0,0';
                           const rect = streamRef.current.getBoundingClientRect();
-                          const nw = streamRef.current.naturalWidth || 1280;
-                          const nh = streamRef.current.naturalHeight || 720;
+                          const nw = status?.frame_width || streamRef.current.naturalWidth || 1280;
+                          const nh = status?.frame_height || streamRef.current.naturalHeight || 720;
                           const px = p[0] / (nw / rect.width);
                           const py = p[1] / (nh / rect.height);
                           return `${px},${py}`;
@@ -690,8 +725,8 @@ export default function App() {
                     {zonePoints.map((p, i) => {
                       if (!streamRef.current) return null;
                       const rect = streamRef.current.getBoundingClientRect();
-                      const nw = streamRef.current.naturalWidth || 1280;
-                      const nh = streamRef.current.naturalHeight || 720;
+                      const nw = status?.frame_width || streamRef.current.naturalWidth || 1280;
+                      const nh = status?.frame_height || streamRef.current.naturalHeight || 720;
                       const px = p[0] / (nw / rect.width);
                       const py = p[1] / (nh / rect.height);
                       return (
@@ -897,12 +932,18 @@ export default function App() {
             <div className="panel-title">🗺 ROAD ZONE CONFIGURATION</div>
             <div className="road-preview">
               {status?.road_zone_configured && status.road_zone_points.length > 0 ? (
-                <svg width="100%" height="80" style={{ background: '#0a1420' }}>
+                <svg
+                  viewBox={`0 0 ${status.frame_width || 1280} ${status.frame_height || 720}`}
+                  width="100%"
+                  height="80"
+                  preserveAspectRatio="none"
+                  style={{ background: '#0a1420', borderRadius: '4px' }}
+                >
                   <polygon
-                    points={status.road_zone_points.map(p => `${p[0] / 5},${p[1] / 6}`).join(' ')}
+                    points={status.road_zone_points.map(p => `${p[0]},${p[1]}`).join(' ')}
                     fill="rgba(240,200,50,0.3)"
                     stroke="#f0c832"
-                    strokeWidth="1.5"
+                    strokeWidth={(status.frame_width || 1280) / 100}
                   />
                 </svg>
               ) : (
@@ -918,10 +959,7 @@ export default function App() {
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
               <button
-                onClick={() => {
-                  setIsConfiguringZone(true);
-                  setZonePoints([]);
-                }}
+                onClick={handleOpenRoadZoneConfig}
                 style={{ flex: 1, padding: '8px', background: '#f39c12', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
               >
                 Configure Road Zone

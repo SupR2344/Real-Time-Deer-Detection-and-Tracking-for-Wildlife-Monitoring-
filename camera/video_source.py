@@ -24,9 +24,17 @@ class VideoSource(CameraSource):
         self.status = CameraStatus.CONNECTING
         path = Path(self.source_path)
         if not path.is_file():
-            logger.warning(f"Video file does not exist: {self.source_path}")
-            self.status = CameraStatus.ERROR
-            return False
+            # Try relative to project root or fallback to file basename in project root
+            root = Path(__file__).resolve().parent.parent
+            candidate = root / self.source_path
+            if candidate.is_file():
+                path = candidate
+            elif (root / path.name).is_file():
+                path = root / path.name
+            else:
+                logger.warning(f"Video file does not exist: {self.source_path}")
+                self.status = CameraStatus.ERROR
+                return False
 
         self._cap = cv2.VideoCapture(str(path))
         if self._cap.isOpened():

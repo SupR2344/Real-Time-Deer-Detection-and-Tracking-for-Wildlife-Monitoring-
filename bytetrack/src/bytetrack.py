@@ -21,6 +21,8 @@ class ByteTrackTracker(BaseTracker):
             lost_track_buffer=config.lost_track_buffer,
             minimum_iou_threshold=config.minimum_iou_threshold,
             frame_rate=config.frame_rate,
+            high_conf_det_threshold=config.high_conf_det_threshold,
+            minimum_consecutive_frames=config.minimum_consecutive_frames,
         )
 
         self._last_frame_id: int | None = None
