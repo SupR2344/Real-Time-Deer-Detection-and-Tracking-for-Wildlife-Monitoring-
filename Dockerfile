@@ -40,14 +40,13 @@ RUN mkdir -p /app/videos/uploads /app/outputs /home/user/.cache && \
 
 USER user
 
-# Expose backend ports (7860 for Hugging Face Spaces, 8000 for standard Docker)
-EXPOSE 7860
+# Expose backend port
 EXPOSE 8000
 
-# Set environment variables (defaults to 7860 for Hugging Face Spaces)
+# Set environment variables (defaults to 8000)
 ENV HOST=0.0.0.0
-ENV PORT=7860
+ENV PORT=8000
 ENV YOLO_DEVICE=cpu
 
-# Command to run FastAPI server (respects dynamic cloud $PORT e.g. on HuggingFace/Render/Railway)
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-7860}"]
+# Command to run FastAPI server (respects dynamic cloud $PORT injected by Render)
+CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
