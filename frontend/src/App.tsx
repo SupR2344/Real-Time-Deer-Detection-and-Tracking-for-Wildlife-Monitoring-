@@ -457,12 +457,6 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 20 * 1024 * 1024) {
-      alert(`File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Free cloud hosting limits direct browser uploads to 20 MB. Please select 'videos/deer_test.mp4' from the dropdown to run directly on the server without uploading, or choose a clip under 20 MB.`);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      return;
-    }
-
     if (isStreamingBrowserCam) {
       await handleStopBrowserCamera();
     }
@@ -851,13 +845,13 @@ export default function App() {
 
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>or</span>
 
-                        {/* 2. Upload Custom File (<20MB) */}
+                        {/* 2. Upload Video File */}
                         <button
                           className="source-upload-btn"
                           disabled={isUploadingVideo}
                           onClick={() => fileInputRef.current?.click()}
                         >
-                          {isUploadingVideo ? (uploadProgress || 'Uploading...') : '📁 Upload Custom Clip (<20MB)'}
+                          {isUploadingVideo ? (uploadProgress || 'Uploading...') : '📁 Upload Video File'}
                         </button>
                       </div>
                     </div>
